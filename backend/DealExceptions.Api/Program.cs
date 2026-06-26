@@ -5,6 +5,7 @@ using DealExceptions.Infrastructure.Data;
 using DealExceptions.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using Serilog.Events;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -30,13 +31,6 @@ try
         p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
     var app = builder.Build();
-
-    using (var scope = app.Services.CreateScope())
-    {
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        db.Database.EnsureCreated();
-        await DbSeeder.SeedAsync(db);
-    }
 
     app.UseSwagger();
     app.UseSwaggerUI();

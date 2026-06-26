@@ -15,11 +15,24 @@ services:
       timeout: 5s
       retries: 10
 
+  db-migrate:
+    build:
+      context: ./backend
+      dockerfile: DealExceptions.Database.DbUp/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionString: "Host=db;Database=dealexceptions;Username=app;Password=app_dev_pw"
+    restart: on-failure
+
   backend:
     build: ./backend
     depends_on:
       db:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     environment:
       ConnectionStrings__DefaultConnection: "Host=db;Database=dealexceptions;Username=app;Password=app_dev_pw"
       ASPNETCORE_ENVIRONMENT: Development
