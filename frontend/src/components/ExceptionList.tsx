@@ -11,13 +11,10 @@ interface Props {
 export function ExceptionList({ exceptions, selectedId, onSelect }: Props) {
   if (exceptions.length === 0) {
     return (
-      <div style={{
-        padding: '32px',
-        textAlign: 'center',
-        color: '#64748b',
-        fontSize: '14px',
-      }}>
-        No exceptions found.
+      <div style={{ padding: '48px 32px', textAlign: 'center' }}>
+        <div style={{ fontSize: '32px', marginBottom: '8px' }}>📋</div>
+        <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: '4px' }}>No exceptions found</div>
+        <div style={{ fontSize: '13px', color: 'var(--muted)' }}>Try adjusting your filters</div>
       </div>
     )
   }
@@ -44,45 +41,43 @@ export function ExceptionList({ exceptions, selectedId, onSelect }: Props) {
                 key={exc.id}
                 onClick={() => onSelect(exc.id)}
                 style={{
-                  borderLeft: isSelected ? '3px solid #1d4ed8' : '3px solid transparent',
-                  background: isSelected ? '#eff6ff' : undefined,
+                  borderLeft: isSelected ? '3px solid var(--primary)' : '3px solid transparent',
+                  background: isSelected ? 'var(--primary-light)' : undefined,
                 }}
               >
                 <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ fontWeight: 500, fontFamily: 'monospace', fontSize: '13px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: '12px', color: 'var(--text)' }}>
                       {exc.dealRef}
                     </span>
                     {exc.isPossibleDuplicate && (
-                      <span
-                        title="This may be a duplicate"
-                        style={{
-                          color: '#b45309',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          background: '#fef9c3',
-                          border: '1px solid #fde68a',
-                          borderRadius: '4px',
-                          padding: '1px 5px',
-                        }}
-                      >
-                        (duplicate?)
+                      <span title="May be a duplicate" style={{
+                        color: '#92400e',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        background: '#fef3c7',
+                        border: '1px solid #fde68a',
+                        borderRadius: '4px',
+                        padding: '1px 5px',
+                        letterSpacing: '0.02em',
+                      }}>
+                        DUPE?
                       </span>
                     )}
                   </div>
                 </td>
-                <td>{exc.clientName}</td>
-                <td style={{ color: '#475569' }}>{exc.exceptionType}</td>
+                <td style={{ fontWeight: 500 }}>{exc.clientName}</td>
+                <td style={{ color: 'var(--muted)' }}>{exc.exceptionType}</td>
                 <td><PriorityBadge priority={exc.priority} /></td>
                 <td><StatusBadge status={exc.status} /></td>
                 <td>
                   {exc.assignedOwner
-                    ? exc.assignedOwner
-                    : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>(unassigned)</span>
+                    ? <span style={{ color: 'var(--text-2)' }}>{exc.assignedOwner}</span>
+                    : <span style={{ color: 'var(--subtle)', fontStyle: 'italic', fontSize: '12px' }}>Unassigned</span>
                   }
                 </td>
-                <td style={{ color: '#64748b', whiteSpace: 'nowrap' }}>
-                  {new Date(exc.createdAt).toLocaleDateString()}
+                <td style={{ color: 'var(--muted)', whiteSpace: 'nowrap', fontSize: '12px' }}>
+                  {new Date(exc.createdAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </td>
               </tr>
             )

@@ -9,16 +9,24 @@
 :root {
   --primary: #1d4ed8;
   --primary-hover: #1e40af;
+  --primary-light: #eff6ff;
+  --primary-border: #bfdbfe;
   --critical: #dc2626;
   --high: #ea580c;
   --medium: #ca8a04;
   --low: #16a34a;
-  --bg: #f8fafc;
+  --bg: #f1f5f9;
   --surface: #ffffff;
+  --surface-2: #f8fafc;
   --border: #e2e8f0;
+  --border-strong: #cbd5e1;
   --text: #0f172a;
+  --text-2: #334155;
   --muted: #64748b;
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.07);
+  --subtle: #94a3b8;
+  --shadow-sm: 0 1px 2px rgba(15,23,42,0.05), 0 1px 4px rgba(15,23,42,0.04);
+  --shadow: 0 1px 3px rgba(15,23,42,0.07), 0 4px 16px rgba(15,23,42,0.06);
+  --shadow-lg: 0 8px 32px rgba(15,23,42,0.12), 0 2px 8px rgba(15,23,42,0.06);
 }
 
 /* Base Styles */
@@ -32,6 +40,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Thin scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
 /* Container */
 .container {
   max-width: 1200px;
@@ -43,7 +57,7 @@ body {
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 20px;
   box-shadow: var(--shadow-sm);
 }
@@ -60,9 +74,13 @@ body {
   border-radius: 6px;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
   white-space: nowrap;
   line-height: 1.25;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .btn:disabled {
@@ -74,28 +92,31 @@ body {
   background: var(--primary);
   color: #ffffff;
   border-color: var(--primary);
+  box-shadow: 0 1px 2px rgba(29,78,216,0.2);
 }
 
 .btn-primary:hover:not(:disabled) {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
+  box-shadow: 0 2px 6px rgba(29,78,216,0.3);
 }
 
 .btn-ghost {
   background: transparent;
-  color: var(--text);
+  color: var(--text-2);
   border-color: var(--border);
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: var(--bg);
-  border-color: #cbd5e1;
+  background: var(--surface-2);
+  border-color: var(--border-strong);
 }
 
 /* Badge */
 .badge {
-  display: inline-block;
-  padding: 2px 10px;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
   border-radius: 9999px;
   font-size: 12px;
   font-weight: 600;
@@ -124,12 +145,12 @@ input:focus,
 select:focus,
 textarea:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgb(29 78 216 / 0.15);
+  box-shadow: 0 0 0 3px rgba(29,78,216,0.12);
 }
 
 input::placeholder,
 textarea::placeholder {
-  color: var(--muted);
+  color: var(--subtle);
 }
 
 textarea {
@@ -159,9 +180,9 @@ label {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 16px 20px;
   color: var(--critical);
-  font-size: 14px;
+  font-size: 13px;
   background: #fef2f2;
   border: 1px solid #fecaca;
   border-radius: 8px;
@@ -189,18 +210,18 @@ table {
 }
 
 thead tr {
-  background: var(--bg);
-  border-bottom: 2px solid var(--border);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
 }
 
 thead th {
-  padding: 10px 12px;
+  padding: 10px 16px;
   text-align: left;
   font-weight: 600;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   white-space: nowrap;
 }
 
@@ -210,12 +231,33 @@ tbody tr {
   transition: background 0.1s;
 }
 
+tbody tr:last-child {
+  border-bottom: none;
+}
+
 tbody tr:hover {
-  background: #f1f5f9;
+  background: #f8fafc;
 }
 
 tbody td {
-  padding: 10px 12px;
+  padding: 13px 16px;
   color: var(--text);
   vertical-align: middle;
+}
+
+/* Section divider */
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0;
+}
+
+/* Meta label */
+.meta-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 3px;
 }
