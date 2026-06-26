@@ -66,13 +66,39 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    DECLARE @Id INT;
-    DECLARE @Now DATETIME2 = SYSUTCDATETIME();
+    DECLARE @Id          INT;
+    DECLARE @Now         DATETIME2 = SYSUTCDATETIME();
+    DECLARE @IsDuplicate BIT       = 0;
+
+    -- Flag if any open exception shares the same DealRef
+    -- or the same ClientName + ExceptionType combination.
+    IF EXISTS (
+        SELECT 1 FROM [dbo].[DealExceptions]
+        WHERE [Status] NOT IN ('Closed', 'Approved', 'Rejected')
+          AND (
+              [DealRef] = @DealRef
+              OR ([ClientName] = @ClientName AND [ExceptionType] = @ExceptionType)
+          )
+    )
+    BEGIN
+        SET @IsDuplicate = 1;
+
+        -- Back-flag the existing open matches so they appear as duplicates too.
+        UPDATE [dbo].[DealExceptions]
+        SET    [IsPossibleDuplicate] = 1
+        WHERE  [Status] NOT IN ('Closed', 'Approved', 'Rejected')
+          AND  (
+                   [DealRef] = @DealRef
+                   OR ([ClientName] = @ClientName AND [ExceptionType] = @ExceptionType)
+               );
+    END
 
     INSERT INTO [dbo].[DealExceptions]
-        ([DealRef], [ClientName], [ExceptionType], [Description], [Priority], [Status], [AssignedOwner], [CreatedAt], [UpdatedAt])
+        ([DealRef], [ClientName], [ExceptionType], [Description], [Priority], [Status],
+         [AssignedOwner], [CreatedAt], [UpdatedAt], [IsPossibleDuplicate])
     VALUES
-        (@DealRef, @ClientName, @ExceptionType, @Description, @Priority, 'New', @AssignedOwner, @Now, @Now);
+        (@DealRef, @ClientName, @ExceptionType, @Description, @Priority, 'New',
+         @AssignedOwner, @Now, @Now, @IsDuplicate);
 
     SET @Id = SCOPE_IDENTITY();
 
