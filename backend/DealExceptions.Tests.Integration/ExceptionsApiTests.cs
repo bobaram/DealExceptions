@@ -24,13 +24,14 @@ public class ExceptionsApiTests : IAsyncLifetime
     // ── GET /api/exceptions ────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetAll_Returns200WithEmptyArray_WhenNoneExist()
+    public async Task GetAll_Returns200WithEmptyPage_WhenNoneExist()
     {
         var response = await _http.GetAsync("/api/exceptions");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.Equal("[]", body.Trim());
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOpts);
+        Assert.Equal(0, body.GetProperty("totalCount").GetInt32());
+        Assert.Empty(body.GetProperty("items").EnumerateArray());
     }
 
     [Fact]
@@ -39,9 +40,10 @@ public class ExceptionsApiTests : IAsyncLifetime
         await CreateExceptionAsync();
         await CreateExceptionAsync(dealRef: "DEAL-002");
 
-        var list = await _http.GetFromJsonAsync<JsonElement[]>("/api/exceptions", JsonOpts);
+        var body = await _http.GetFromJsonAsync<JsonElement>("/api/exceptions", JsonOpts);
 
-        Assert.Equal(2, list!.Length);
+        Assert.Equal(2, body.GetProperty("totalCount").GetInt32());
+        Assert.Equal(2, body.GetProperty("items").GetArrayLength());
     }
 
     [Fact]
@@ -51,10 +53,27 @@ public class ExceptionsApiTests : IAsyncLifetime
         var id = await CreateExceptionIdAsync(dealRef: "DEAL-B");
         await PatchStatusAsync(id, "Approved");
 
-        var open = await _http.GetFromJsonAsync<JsonElement[]>("/api/exceptions?openOnly=true", JsonOpts);
+        var body = await _http.GetFromJsonAsync<JsonElement>("/api/exceptions?openOnly=true", JsonOpts);
+        var items = body.GetProperty("items").EnumerateArray().ToList();
 
-        Assert.Single(open!);
-        Assert.Equal("DEAL-A", open![0].GetProperty("dealRef").GetString());
+        Assert.Single(items);
+        Assert.Equal("DEAL-A", items[0].GetProperty("dealRef").GetString());
+    }
+
+    [Fact]
+    public async Task GetAll_PaginatesCorrectly()
+    {
+        for (var i = 1; i <= 5; i++)
+            await CreateExceptionAsync(dealRef: $"DEAL-{i:D3}");
+
+        var page1 = await _http.GetFromJsonAsync<JsonElement>("/api/exceptions?page=1&pageSize=3", JsonOpts);
+        var page2 = await _http.GetFromJsonAsync<JsonElement>("/api/exceptions?page=2&pageSize=3", JsonOpts);
+
+        Assert.Equal(5, page1.GetProperty("totalCount").GetInt32());
+        Assert.Equal(3, page1.GetProperty("items").GetArrayLength());
+        Assert.Equal(2, page2.GetProperty("items").GetArrayLength());
+        Assert.Equal(1, page1.GetProperty("page").GetInt32());
+        Assert.Equal(2, page2.GetProperty("page").GetInt32());
     }
 
     // ── POST /api/exceptions ───────────────────────────────────────────────────

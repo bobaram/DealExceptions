@@ -15,8 +15,10 @@ public static class ExceptionsEndpoints
             [FromQuery] string? status,
             [FromQuery] string? priority,
             [FromQuery] string? search,
-            [FromQuery] bool openOnly = false) =>
-            Results.Ok(await svc.GetAllAsync(status, priority, search, openOnly)))
+            [FromQuery] bool openOnly = false,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20) =>
+            Results.Ok(await svc.GetAllAsync(status, priority, search, openOnly, page, pageSize)))
             .WithName("GetExceptions");
 
         group.MapGet("/{id:int}", async (int id, ExceptionService svc) =>

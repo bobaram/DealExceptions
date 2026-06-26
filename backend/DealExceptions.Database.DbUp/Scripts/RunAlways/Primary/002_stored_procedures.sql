@@ -2,7 +2,9 @@ CREATE OR ALTER PROCEDURE [dbo].[usp_DealException_GetAll]
     @Status   NVARCHAR(20)  = NULL,
     @Priority NVARCHAR(20)  = NULL,
     @Search   NVARCHAR(200) = NULL,
-    @OpenOnly BIT           = 0
+    @OpenOnly BIT           = 0,
+    @Page     INT           = 1,
+    @PageSize INT           = 20
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -10,7 +12,8 @@ BEGIN
     SELECT
         [Id], [DealRef], [ClientName], [ExceptionType],
         [Priority], [Status], [AssignedOwner],
-        [CreatedAt], [UpdatedAt], [IsPossibleDuplicate]
+        [CreatedAt], [UpdatedAt], [IsPossibleDuplicate],
+        COUNT(*) OVER() AS [TotalCount]
     FROM [dbo].[DealExceptions]
     WHERE
         (@Status   IS NULL OR [Status]   = @Status)
@@ -25,7 +28,9 @@ BEGIN
             WHEN 'Medium'   THEN 3
             WHEN 'Low'      THEN 4
         END,
-        [CreatedAt] DESC;
+        [CreatedAt] DESC
+    OFFSET (@Page - 1) * @PageSize ROWS
+    FETCH NEXT @PageSize ROWS ONLY;
 END
 GO
 

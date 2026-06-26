@@ -35,6 +35,13 @@ export interface StatusHistory {
   notes: string | null;
 }
 
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface OpenByOwnerRow {
   owner: string;
   count: number;

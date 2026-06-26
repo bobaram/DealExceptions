@@ -7,19 +7,29 @@ namespace DealExceptions.Infrastructure.Repositories;
 
 public class ExceptionRepository(IDbConnectionFactory connFactory) : IExceptionRepository
 {
-    public async Task<IEnumerable<DealException>> ListAsync(ExceptionFilters filters)
+    public async Task<(IEnumerable<DealException> Items, int TotalCount)> ListAsync(ExceptionFilters filters)
     {
         await using var conn = connFactory.CreateConnection();
-        return await conn.QueryAsync<DealException>(
+        var rows = (await conn.QueryAsync<DealExceptionRow>(
             "usp_DealException_GetAll",
             new
             {
                 filters.Status,
                 filters.Priority,
                 filters.Search,
-                OpenOnly = filters.OpenOnly ? 1 : 0
+                OpenOnly  = filters.OpenOnly ? 1 : 0,
+                filters.Page,
+                filters.PageSize
             },
-            commandType: CommandType.StoredProcedure);
+            commandType: CommandType.StoredProcedure)).ToList();
+
+        return (rows, rows.FirstOrDefault()?.TotalCount ?? 0);
+    }
+
+    // Extends DealException to capture the extra TotalCount window-function column.
+    private sealed class DealExceptionRow : DealException
+    {
+        public int TotalCount { get; set; }
     }
 
     public async Task<DealException?> FindWithDetailsAsync(int id)

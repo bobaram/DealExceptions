@@ -9,29 +9,40 @@ import ReportsPage from './ReportsPage'
 
 type ActiveView = 'exceptions' | 'reports'
 
-const ALL_STATUSES = ['New', 'Pending', 'InReview', 'Approved', 'Rejected', 'Closed']
+const ALL_STATUSES  = ['New', 'Pending', 'InReview', 'Approved', 'Rejected', 'Closed']
 const ALL_PRIORITIES = ['Low', 'Medium', 'High', 'Critical']
+const PAGE_SIZE = 20
 
 export default function ExceptionsPage() {
   const queryClient = useQueryClient()
-  const [activeView, setActiveView] = useState<ActiveView>('exceptions')
-  const [selectedId, setSelectedId] = useState<number | null>(null)
-  const [filters, setFilters] = useState<ExceptionFilters>({})
+  const [activeView, setActiveView]   = useState<ActiveView>('exceptions')
+  const [selectedId, setSelectedId]   = useState<number | null>(null)
+  const [filters, setFilters]         = useState<ExceptionFilters>({})
+  const [page, setPage]               = useState(1)
   const [showNewForm, setShowNewForm] = useState(false)
   const [searchInput, setSearchInput] = useState('')
 
+  function updateFilters(patch: Partial<ExceptionFilters>) {
+    setFilters(f => ({ ...f, ...patch }))
+    setPage(1)
+  }
+
   function applySearch(value: string) {
-    setFilters(f => ({ ...f, search: value || undefined }))
+    updateFilters({ search: value || undefined })
   }
 
   const {
-    data: exceptions,
+    data: result,
     isLoading: listLoading,
     error: listError,
   } = useQuery({
-    queryKey: ['exceptions', filters],
-    queryFn: () => exceptionsApi.list(filters),
+    queryKey: ['exceptions', filters, page],
+    queryFn: () => exceptionsApi.list({ ...filters, page, pageSize: PAGE_SIZE }),
   })
+
+  const exceptions  = result?.items ?? []
+  const totalCount  = result?.totalCount ?? 0
+  const totalPages  = Math.ceil(totalCount / PAGE_SIZE)
 
   const {
     data: selectedDetail,
@@ -69,9 +80,9 @@ export default function ExceptionsPage() {
     },
   })
 
-  const openCount = exceptions?.filter(e => e.isOpen).length ?? 0
-  const criticalOpenCount = exceptions?.filter(e => e.isOpen && e.isCritical).length ?? 0
-  const unassignedCount = exceptions?.filter(e => e.isOpen && !e.assignedOwner).length ?? 0
+  const openCount         = exceptions.filter(e => e.isOpen).length
+  const criticalOpenCount = exceptions.filter(e => e.isOpen && e.isCritical).length
+  const unassignedCount   = exceptions.filter(e => e.isOpen && !e.assignedOwner).length
 
   async function handleStatusChange(status: string, notes?: string) {
     if (!selectedId) return
@@ -173,8 +184,8 @@ export default function ExceptionsPage() {
             padding: '14px 18px',
             boxShadow: 'var(--shadow-sm)',
           }}>
-            <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--primary)', lineHeight: 1 }}>{openCount}</div>
-            <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 500, marginTop: '4px' }}>Open Exceptions</div>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--primary)', lineHeight: 1 }}>{totalCount}</div>
+            <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 500, marginTop: '4px' }}>Total Exceptions</div>
           </div>
           <div style={{
             flex: '1', minWidth: '140px',
@@ -199,6 +210,18 @@ export default function ExceptionsPage() {
           }}>
             <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--medium)', lineHeight: 1 }}>{unassignedCount}</div>
             <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 500, marginTop: '4px' }}>Unassigned</div>
+          </div>
+          <div style={{
+            flex: '1', minWidth: '140px',
+            background: '#ffffff',
+            border: '1px solid var(--border)',
+            borderTop: '3px solid var(--low)',
+            borderRadius: '10px',
+            padding: '14px 18px',
+            boxShadow: 'var(--shadow-sm)',
+          }}>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--low)', lineHeight: 1 }}>{openCount}</div>
+            <div style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 500, marginTop: '4px' }}>Open (this page)</div>
           </div>
         </div>
 
@@ -234,7 +257,7 @@ export default function ExceptionsPage() {
 
           <select
             value={filters.status ?? ''}
-            onChange={e => setFilters(f => ({ ...f, status: e.target.value || undefined }))}
+            onChange={e => updateFilters({ status: e.target.value || undefined })}
             style={{ width: 'auto', minWidth: '130px', margin: 0 }}
           >
             <option value="">All Statuses</option>
@@ -245,7 +268,7 @@ export default function ExceptionsPage() {
 
           <select
             value={filters.priority ?? ''}
-            onChange={e => setFilters(f => ({ ...f, priority: e.target.value || undefined }))}
+            onChange={e => updateFilters({ priority: e.target.value || undefined })}
             style={{ width: 'auto', minWidth: '130px', margin: 0 }}
           >
             <option value="">All Priorities</option>
@@ -262,7 +285,7 @@ export default function ExceptionsPage() {
             <input
               type="checkbox"
               checked={filters.openOnly ?? false}
-              onChange={e => setFilters(f => ({ ...f, openOnly: e.target.checked || undefined }))}
+              onChange={e => updateFilters({ openOnly: e.target.checked || undefined })}
               style={{ width: 'auto', display: 'inline-block', margin: 0, accentColor: 'var(--primary)' }}
             />
             Open only
@@ -277,19 +300,60 @@ export default function ExceptionsPage() {
           alignItems: 'start',
         }}>
           {/* List */}
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            {listLoading ? (
-              <div className="loading">Loading exceptions…</div>
-            ) : listError ? (
-              <div className="error" style={{ margin: '16px' }}>
-                {listError instanceof Error ? listError.message : 'Unknown error'}
+          <div>
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              {listLoading ? (
+                <div className="loading">Loading exceptions…</div>
+              ) : listError ? (
+                <div className="error" style={{ margin: '16px' }}>
+                  {listError instanceof Error ? listError.message : 'Unknown error'}
+                </div>
+              ) : (
+                <ExceptionList
+                  exceptions={exceptions}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                />
+              )}
+            </div>
+
+            {/* Pagination */}
+            {!listLoading && !listError && totalPages > 1 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                marginTop: '12px',
+              }}>
+                <button
+                  className="btn"
+                  disabled={page === 1}
+                  onClick={() => setPage(p => p - 1)}
+                  style={{ padding: '5px 12px', fontSize: '13px' }}
+                >
+                  ← Prev
+                </button>
+                <span style={{ fontSize: '13px', color: 'var(--muted)', minWidth: '100px', textAlign: 'center' }}>
+                  Page {page} of {totalPages}
+                  <span style={{ color: 'var(--subtle)', marginLeft: '6px' }}>({totalCount} total)</span>
+                </span>
+                <button
+                  className="btn"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(p => p + 1)}
+                  style={{ padding: '5px 12px', fontSize: '13px' }}
+                >
+                  Next →
+                </button>
               </div>
-            ) : (
-              <ExceptionList
-                exceptions={exceptions ?? []}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-              />
+            )}
+
+            {/* Empty / hint */}
+            {!listLoading && !listError && exceptions.length > 0 && !selectedId && totalPages <= 1 && (
+              <p style={{ marginTop: '12px', textAlign: 'center', color: 'var(--subtle)', fontSize: '13px' }}>
+                Select a row to view details
+              </p>
             )}
           </div>
 
@@ -313,12 +377,6 @@ export default function ExceptionsPage() {
           )}
         </div>
 
-        {/* Empty hint */}
-        {!listLoading && !listError && (exceptions ?? []).length > 0 && !selectedId && (
-          <p style={{ marginTop: '12px', textAlign: 'center', color: 'var(--subtle)', fontSize: '13px' }}>
-            Select a row to view details
-          </p>
-        )}
       </div>
       )} {/* end exceptions view */}
 

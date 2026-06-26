@@ -7,11 +7,11 @@ namespace DealExceptions.Application.Services;
 
 public class ExceptionService(IExceptionRepository repo)
 {
-    public async Task<IEnumerable<ExceptionSummaryDto>> GetAllAsync(
-        string? status, string? priority, string? search, bool openOnly)
+    public async Task<PagedResult<ExceptionSummaryDto>> GetAllAsync(
+        string? status, string? priority, string? search, bool openOnly, int page = 1, int pageSize = 20)
     {
-        var items = await repo.ListAsync(new ExceptionFilters(status, priority, search, openOnly));
-        return items.Select(ToSummary);
+        var (items, total) = await repo.ListAsync(new ExceptionFilters(status, priority, search, openOnly, page, pageSize));
+        return new PagedResult<ExceptionSummaryDto>(items.Select(ToSummary), total, page, pageSize);
     }
 
     public async Task<ExceptionDetailDto?> GetByIdAsync(int id)
