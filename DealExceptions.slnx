@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/backend/">
+    <Project Path="backend/DealExceptions.Api.csproj" />
+  </Folder>
+</Solution>
