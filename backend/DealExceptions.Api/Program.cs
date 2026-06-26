@@ -17,7 +17,7 @@ try
     builder.Host.UseSerilog();
 
     builder.Services.AddDbContext<AppDbContext>(opts =>
-        opts.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+        opts.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
     builder.Services.AddScoped<IExceptionRepository, ExceptionRepository>();
     builder.Services.AddScoped<ICommentRepository, CommentRepository>();

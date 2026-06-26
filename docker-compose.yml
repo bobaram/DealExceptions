@@ -1,19 +1,20 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
-      POSTGRES_DB: dealexceptions
-      POSTGRES_USER: app
-      POSTGRES_PASSWORD: app_dev_pw
+      SA_PASSWORD: "Dev@123456!"
+      ACCEPT_EULA: "Y"
+      MSSQL_DB: dealexceptions
     ports:
-      - "5432:5432"
+      - "1433:1433"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - sqldata:/var/opt/mssql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app -d dealexceptions"]
-      interval: 5s
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "Dev@123456!" -No -Q "SELECT 1" || exit 1
+      interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 30s
 
   db-migrate:
     build:
@@ -23,7 +24,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      ConnectionString: "Host=db;Database=dealexceptions;Username=app;Password=app_dev_pw"
+      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=dealexceptions;User Id=sa;Password=Dev@123456!;TrustServerCertificate=True;"
     restart: on-failure
 
   backend:
@@ -34,7 +35,7 @@ services:
       db-migrate:
         condition: service_completed_successfully
     environment:
-      ConnectionStrings__DefaultConnection: "Host=db;Database=dealexceptions;Username=app;Password=app_dev_pw"
+      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=dealexceptions;User Id=sa;Password=Dev@123456!;TrustServerCertificate=True;"
       ASPNETCORE_ENVIRONMENT: Development
     ports:
       - "8080:8080"
@@ -47,4 +48,4 @@ services:
       - "3000:80"
 
 volumes:
-  pgdata:
+  sqldata:

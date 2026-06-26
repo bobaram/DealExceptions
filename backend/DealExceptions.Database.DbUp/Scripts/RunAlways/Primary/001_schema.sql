@@ -1,45 +1,69 @@
--- Deal Exceptions Tracker — PostgreSQL Schema
--- Run this against a fresh database to create all tables.
--- EF Core EnsureCreated() generates the same structure at runtime;
--- this file exists as a standalone deliverable and migration baseline.
+-- Idempotent schema: tables + indexes
+-- RunAlways/Primary — NullJournal (runs every startup)
 
-CREATE TABLE IF NOT EXISTS "DealExceptions" (
-    "Id"                  SERIAL          PRIMARY KEY,
-    "DealRef"             VARCHAR(50)     NOT NULL,
-    "ClientName"          VARCHAR(200)    NOT NULL,
-    "ExceptionType"       VARCHAR(100)    NOT NULL,
-    "Description"         TEXT            NOT NULL,
-    "Priority"            VARCHAR(20)     NOT NULL CHECK ("Priority" IN ('Low','Medium','High','Critical')),
-    "Status"              VARCHAR(20)     NOT NULL CHECK ("Status"   IN ('New','Pending','InReview','Approved','Rejected','Closed')),
-    "AssignedOwner"       VARCHAR(200)    NULL,
-    "CreatedAt"           TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    "UpdatedAt"           TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    "LegacyId"            INT             NULL,
-    "IsPossibleDuplicate" BOOLEAN         NOT NULL DEFAULT FALSE
-);
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'DealExceptions' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+    CREATE TABLE [dbo].[DealExceptions] (
+        [Id]                  INT           NOT NULL IDENTITY(1,1),
+        [DealRef]             NVARCHAR(50)  NOT NULL,
+        [ClientName]          NVARCHAR(200) NOT NULL,
+        [ExceptionType]       NVARCHAR(100) NOT NULL,
+        [Description]         NVARCHAR(MAX) NOT NULL,
+        [Priority]            NVARCHAR(20)  NOT NULL,
+        [Status]              NVARCHAR(20)  NOT NULL,
+        [AssignedOwner]       NVARCHAR(200) NULL,
+        [CreatedAt]           DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+        [UpdatedAt]           DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+        [LegacyId]            INT           NULL,
+        [IsPossibleDuplicate] BIT           NOT NULL DEFAULT 0,
+        CONSTRAINT [PK_DealExceptions] PRIMARY KEY CLUSTERED ([Id] ASC)
+    );
+END
+GO
 
-CREATE TABLE IF NOT EXISTS "Comments" (
-    "Id"          SERIAL       PRIMARY KEY,
-    "ExceptionId" INT          NOT NULL REFERENCES "DealExceptions"("Id") ON DELETE CASCADE,
-    "AuthorName"  VARCHAR(200) NOT NULL,
-    "Text"        TEXT         NOT NULL,
-    "CreatedAt"   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    "LegacyId"    INT          NULL
-);
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Comments' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+    CREATE TABLE [dbo].[Comments] (
+        [Id]          INT           NOT NULL IDENTITY(1,1),
+        [ExceptionId] INT           NOT NULL,
+        [AuthorName]  NVARCHAR(200) NOT NULL,
+        [Text]        NVARCHAR(MAX) NOT NULL,
+        [CreatedAt]   DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+        [LegacyId]    INT           NULL,
+        CONSTRAINT [PK_Comments]                PRIMARY KEY CLUSTERED ([Id] ASC),
+        CONSTRAINT [FK_Comments_DealExceptions] FOREIGN KEY ([ExceptionId]) REFERENCES [dbo].[DealExceptions] ([Id]) ON DELETE CASCADE
+    );
+END
+GO
 
-CREATE TABLE IF NOT EXISTS "StatusHistories" (
-    "Id"          SERIAL      PRIMARY KEY,
-    "ExceptionId" INT         NOT NULL REFERENCES "DealExceptions"("Id") ON DELETE CASCADE,
-    "FromStatus"  VARCHAR(20) NOT NULL,
-    "ToStatus"    VARCHAR(20) NOT NULL,
-    "ChangedBy"   VARCHAR(200) NOT NULL,
-    "ChangedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    "Notes"       TEXT        NULL
-);
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'StatusHistories' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+    CREATE TABLE [dbo].[StatusHistories] (
+        [Id]          INT           NOT NULL IDENTITY(1,1),
+        [ExceptionId] INT           NOT NULL,
+        [FromStatus]  NVARCHAR(20)  NOT NULL,
+        [ToStatus]    NVARCHAR(20)  NOT NULL,
+        [ChangedBy]   NVARCHAR(200) NOT NULL,
+        [ChangedAt]   DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+        [Notes]       NVARCHAR(MAX) NULL,
+        CONSTRAINT [PK_StatusHistories]                PRIMARY KEY CLUSTERED ([Id] ASC),
+        CONSTRAINT [FK_StatusHistories_DealExceptions] FOREIGN KEY ([ExceptionId]) REFERENCES [dbo].[DealExceptions] ([Id]) ON DELETE CASCADE
+    );
+END
+GO
 
--- Indexes for common query patterns
-CREATE INDEX IF NOT EXISTS ix_exceptions_status   ON "DealExceptions"("Status");
-CREATE INDEX IF NOT EXISTS ix_exceptions_priority ON "DealExceptions"("Priority");
-CREATE INDEX IF NOT EXISTS ix_exceptions_owner    ON "DealExceptions"("AssignedOwner");
-CREATE INDEX IF NOT EXISTS ix_comments_exception  ON "Comments"("ExceptionId");
-CREATE INDEX IF NOT EXISTS ix_history_exception   ON "StatusHistories"("ExceptionId");
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_DealExceptions_Status' AND object_id = OBJECT_ID('dbo.DealExceptions'))
+    CREATE INDEX [IX_DealExceptions_Status]   ON [dbo].[DealExceptions] ([Status]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_DealExceptions_Priority' AND object_id = OBJECT_ID('dbo.DealExceptions'))
+    CREATE INDEX [IX_DealExceptions_Priority] ON [dbo].[DealExceptions] ([Priority]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_DealExceptions_Owner' AND object_id = OBJECT_ID('dbo.DealExceptions'))
+    CREATE INDEX [IX_DealExceptions_Owner]    ON [dbo].[DealExceptions] ([AssignedOwner]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Comments_ExceptionId' AND object_id = OBJECT_ID('dbo.Comments'))
+    CREATE INDEX [IX_Comments_ExceptionId]    ON [dbo].[Comments] ([ExceptionId]);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_StatusHistories_ExceptionId' AND object_id = OBJECT_ID('dbo.StatusHistories'))
+    CREATE INDEX [IX_StatusHistories_ExceptionId] ON [dbo].[StatusHistories] ([ExceptionId]);
+GO

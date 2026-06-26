@@ -24,8 +24,8 @@ public class ExceptionRepository(AppDbContext db) : IExceptionRepository
             query = query.Where(e => e.Priority == p);
 
         if (!string.IsNullOrWhiteSpace(filters.Search))
-            query = query.Where(e => EF.Functions.ILike(e.DealRef, $"%{filters.Search}%")
-                || EF.Functions.ILike(e.ClientName, $"%{filters.Search}%"));
+            query = query.Where(e => EF.Functions.Like(e.DealRef, $"%{filters.Search}%")
+                || EF.Functions.Like(e.ClientName, $"%{filters.Search}%"));
 
         return await query
             .OrderByDescending(e => e.Priority)
