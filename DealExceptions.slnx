@@ -6,4 +6,8 @@
     <Project Path="backend/DealExceptions.Domain/DealExceptions.Domain.csproj" />
     <Project Path="backend/DealExceptions.Infrastructure/DealExceptions.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="backend/DealExceptions.Tests.Unit/DealExceptions.Tests.Unit.csproj" />
+    <Project Path="backend/DealExceptions.Tests.Integration/DealExceptions.Tests.Integration.csproj" />
+  </Folder>
 </Solution>
