@@ -9,5 +9,5 @@ public interface IExceptionRepository
     Task<IEnumerable<DealException>> ListAsync(ExceptionFilters filters);
     Task<DealException?> FindWithDetailsAsync(int id);
     Task<DealException> AddAsync(DealException entity);
-    Task SaveChangesAsync();
+    Task UpdateStatusAsync(int id, string newStatus, string changedBy, string? notes);
 }

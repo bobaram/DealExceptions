@@ -1,11 +1,7 @@
-using DealExceptions.Application.Interfaces;
 using DealExceptions.Application.Services;
 using DealExceptions.Endpoints;
-using DealExceptions.Infrastructure.Data;
-using DealExceptions.Infrastructure.Repositories;
-using Microsoft.EntityFrameworkCore;
+using DealExceptions.Infrastructure;
 using Serilog;
-using Serilog.Events;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -16,11 +12,7 @@ try
     var builder = WebApplication.CreateBuilder(args);
     builder.Host.UseSerilog();
 
-    builder.Services.AddDbContext<AppDbContext>(opts =>
-        opts.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-    builder.Services.AddScoped<IExceptionRepository, ExceptionRepository>();
-    builder.Services.AddScoped<ICommentRepository, CommentRepository>();
+    builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.AddScoped<ExceptionService>();
     builder.Services.AddScoped<CommentService>();
 

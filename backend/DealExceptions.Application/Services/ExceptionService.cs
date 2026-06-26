@@ -34,47 +34,21 @@ public class ExceptionService(IExceptionRepository repo)
             Priority = priority,
             Status = ExceptionStatus.New,
             AssignedOwner = string.IsNullOrWhiteSpace(req.AssignedOwner) ? null : req.AssignedOwner.Trim(),
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            StatusHistories = [new StatusHistory { ChangedBy = req.CreatedBy, Notes = "Created" }]
         };
 
-        entity.StatusHistories.Add(new StatusHistory
-        {
-            FromStatus = ExceptionStatus.New,
-            ToStatus = ExceptionStatus.New,
-            ChangedBy = req.CreatedBy,
-            ChangedAt = entity.CreatedAt,
-            Notes = "Created"
-        });
-
-        await repo.AddAsync(entity);
-        return ToDetail(entity);
+        var saved = await repo.AddAsync(entity);
+        return ToDetail(saved);
     }
 
     public async Task<ExceptionDetailDto?> UpdateStatusAsync(int id, UpdateStatusRequest req)
     {
-        if (!Enum.TryParse<ExceptionStatus>(req.Status, true, out var newStatus))
+        if (!Enum.TryParse<ExceptionStatus>(req.Status, true, out _))
             throw new ArgumentException($"Invalid status: {req.Status}");
 
+        await repo.UpdateStatusAsync(id, req.Status, req.ChangedBy, req.Notes);
         var entity = await repo.FindWithDetailsAsync(id);
-        if (entity is null) return null;
-
-        var oldStatus = entity.Status;
-        entity.Status = newStatus;
-        entity.UpdatedAt = DateTime.UtcNow;
-
-        entity.StatusHistories.Add(new StatusHistory
-        {
-            ExceptionId = entity.Id,
-            FromStatus = oldStatus,
-            ToStatus = newStatus,
-            ChangedBy = req.ChangedBy,
-            ChangedAt = entity.UpdatedAt,
-            Notes = req.Notes
-        });
-
-        await repo.SaveChangesAsync();
-        return ToDetail(entity);
+        return entity is null ? null : ToDetail(entity);
     }
 
     private static bool IsOpen(ExceptionStatus s) =>

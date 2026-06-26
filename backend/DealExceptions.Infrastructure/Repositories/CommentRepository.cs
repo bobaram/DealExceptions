@@ -1,24 +1,33 @@
+using Dapper;
 using DealExceptions.Application.Interfaces;
 using DealExceptions.Domain.Entities;
-using DealExceptions.Infrastructure.Data;
-using Microsoft.EntityFrameworkCore;
+using System.Data;
 
 namespace DealExceptions.Infrastructure.Repositories;
 
-public class CommentRepository(AppDbContext db) : ICommentRepository
+public class CommentRepository(IDbConnectionFactory connFactory) : ICommentRepository
 {
-    public Task<bool> ExceptionExistsAsync(int id)
-        => db.DealExceptions.AnyAsync(e => e.Id == id);
+    public async Task<bool> ExceptionExistsAsync(int id)
+    {
+        await using var conn = connFactory.CreateConnection();
+        var count = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(1) FROM [dbo].[DealExceptions] WHERE [Id] = @Id",
+            new { Id = id });
+        return count > 0;
+    }
 
     public async Task<Comment> AddAsync(Comment comment)
     {
-        db.Comments.Add(comment);
-        await db.SaveChangesAsync();
+        await using var conn = connFactory.CreateConnection();
+        var newId = await conn.ExecuteScalarAsync<int>(
+            "usp_Comment_Create",
+            new { comment.ExceptionId, comment.AuthorName, Text = comment.Text },
+            commandType: CommandType.StoredProcedure);
+
+        comment.Id = newId;
         return comment;
     }
 
-    public Task TouchExceptionUpdatedAtAsync(int exceptionId, DateTime at)
-        => db.DealExceptions
-            .Where(e => e.Id == exceptionId)
-            .ExecuteUpdateAsync(s => s.SetProperty(e => e.UpdatedAt, at));
+    // usp_Comment_Create already touches DealExceptions.UpdatedAt — no-op here
+    public Task TouchExceptionUpdatedAtAsync(int exceptionId, DateTime at) => Task.CompletedTask;
 }
