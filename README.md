@@ -6,33 +6,79 @@ A replacement for a legacy PowerApps/SharePoint shadow app used by a lending bus
 
 ## How to Run
 
-**Prerequisites:** Docker + Docker Compose
+### Docker (recommended)
+
+**Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) with the Linux engine running.
+
+> **Windows note:** Docker Desktop must be fully started before running the command below. If you see a `dockerDesktopLinuxEngine` pipe error, open Docker Desktop and wait for it to finish initialising, then run:
+> ```bash
+> docker context use default
+> ```
 
 ```bash
-cd solution
 docker compose up --build
 ```
 
-| Service  | URL                                    |
-|----------|----------------------------------------|
-| Frontend | http://localhost:3000                  |
-| API      | http://localhost:8080                  |
-| Swagger  | http://localhost:8080/swagger          |
+| Service  | URL                           |
+|----------|-------------------------------|
+| Frontend | http://localhost:3000         |
+| API      | http://localhost:8080         |
+| Swagger  | http://localhost:8080/swagger |
 
-The backend runs EF Core `EnsureCreated()` on startup and seeds the 12 normalised legacy exceptions automatically.
+On first run Docker will pull the SQL Server 2022 image (~1.5 GB) — this takes a few minutes depending on your connection. Subsequent runs use the cached image and start in seconds.
 
-**Local dev (without Docker):**
+The startup sequence is:
+1. **SQL Server** starts and passes a health check
+2. **DbUp** migrations run — creates tables, stored procedures, and seeds 12 normalised legacy exceptions
+3. **API** starts and listens on port 8080
+4. **Frontend** (nginx serving the Vite build) starts on port 3000
+
+To stop and remove containers (data is persisted in a named volume):
+```bash
+docker compose down
+```
+
+To also wipe the database volume:
+```bash
+docker compose down -v
+```
+
+---
+
+### Local dev (without Docker)
+
+**Prerequisites:**
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- SQL Server (local instance, SQL Express, or [LocalDB](https://learn.microsoft.com/en-us/sql/database-engine/configure-windows/sql-server-express-localdb))
+- [Node.js 20+](https://nodejs.org/)
+
+**1. Run the database migrations**
 
 ```bash
-# Backend — requires .NET 8 SDK and a local PostgreSQL instance
-cd backend
-dotnet run --ConnectionStrings:DefaultConnection="Host=localhost;Database=dealexceptions;Username=postgres;Password=postgres"
+cd backend/DealExceptions.Database.DbUp
+dotnet run --ConnectionStrings:DefaultConnection="Server=localhost;Database=dealexceptions;User Id=sa;Password=YourPassword;TrustServerCertificate=True;"
+```
 
-# Frontend — requires Node 20+
+This creates the schema, stored procedures, and seeds the data. It is safe to run multiple times (idempotent).
+
+**2. Start the API**
+
+```bash
+cd backend/DealExceptions.Api
+dotnet run
+```
+
+Update `appsettings.json` (or set the env var) with your local SQL Server connection string if it differs from the default.
+
+**3. Start the frontend**
+
+```bash
 cd frontend
 npm install
-npm run dev     # proxies /api to localhost:8080
+npm run dev     # dev server proxies /api/* to localhost:8080
 ```
+
+Frontend dev server: http://localhost:5173
 
 ---
 
@@ -49,13 +95,13 @@ npm run dev     # proxies /api to localhost:8080
 - **Seed data** normalised from the legacy CSV: inconsistent priorities (`H`, `critical`, `Critical `), statuses (`CLOSEd`, `InReview`, `APPROVED`), dates (three formats), and owner names resolved
 - **Swagger UI** for API exploration
 - **Docker Compose** for one-command startup
+- **DbUp migrations** — idempotent schema + stored procedure scripts run on every startup; one-time scripts tracked in a journal table
 
 ---
 
 ## What Is Incomplete
 
 - **Authentication / authorisation** — the API is open. In production this would sit behind the company's identity provider (Azure AD / Entra ID is likely given the SharePoint heritage). The `ChangedBy` / `CreatedBy` fields are currently free-text inputs; they would be populated from the JWT claims.
-- **EF Core migrations** — startup uses `EnsureCreated()` which is fine for a demo but does not support incremental schema changes. The next step is `dotnet ef migrations add Initial` to produce versioned migrations.
 - **Owner management** — owners are stored as free text. Production would join to an HR/identity list to prevent the same person being captured as "Nomsa", "Nomsa Mokoena", and "nomsa.mokoena@sourcefin.example".
 - **File attachments** — the business notes that affordability exceptions require supporting documents. This is not implemented.
 - **Email/notification integration** — no alerts when a critical exception approaches the 3-day threshold.
@@ -168,12 +214,12 @@ Acceptance criteria:
 
 ---
 
-**DE-03 — EF Core migrations: replace EnsureCreated with versioned migrations**
+**DE-03 — Pagination: add cursor/page-based pagination to the exceptions list**
 
-> As a developer, I need schema changes to be versioned and applied incrementally, so that we can deploy updates to production without dropping and recreating the database.
+> As a user, I need the exceptions list to paginate so that the application remains responsive as the dataset grows beyond a few hundred rows.
 
 Acceptance criteria:
-- `dotnet ef migrations add Initial` produces a valid initial migration from the current model
-- `docker compose up` applies pending migrations automatically on startup
-- A second migration can be added and applied without data loss on a seeded database
-- CI pipeline fails if there are unapplied model changes with no corresponding migration
+- `GET /api/exceptions` accepts `page` and `pageSize` query parameters (default page size: 50)
+- Response includes `totalCount`, `page`, `pageSize`, and `hasNextPage` fields
+- The frontend renders a pagination control and fetches the correct page on navigation
+- Existing filter parameters (`status`, `priority`, `search`, `openOnly`) work correctly alongside pagination
