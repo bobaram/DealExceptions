@@ -34,3 +34,29 @@ export interface StatusHistory {
   changedAt: string;
   notes: string | null;
 }
+
+export interface OpenByOwnerRow {
+  owner: string;
+  count: number;
+}
+
+export interface CriticalOverdueRow {
+  id: number;
+  dealRef: string;
+  clientName: string;
+  owner: string;
+  createdAt: string;
+  status: string;
+  daysOpen: number;
+}
+
+export interface ByStatusPriorityRow {
+  status: string;
+  priority: string;
+  count: number;
+}
+
+export interface AvgTimeToCloseRow {
+  exceptionType: string;
+  avgDaysToClose: number;
+}

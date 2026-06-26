@@ -5,12 +5,16 @@ import { commentsApi } from '../api/comments'
 import { ExceptionList } from '../components/ExceptionList'
 import { ExceptionDetail } from '../components/ExceptionDetail'
 import { NewExceptionForm } from '../components/NewExceptionForm'
+import ReportsPage from './ReportsPage'
+
+type ActiveView = 'exceptions' | 'reports'
 
 const ALL_STATUSES = ['New', 'Pending', 'InReview', 'Approved', 'Rejected', 'Closed']
 const ALL_PRIORITIES = ['Low', 'Medium', 'High', 'Critical']
 
 export default function ExceptionsPage() {
   const queryClient = useQueryClient()
+  const [activeView, setActiveView] = useState<ActiveView>('exceptions')
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [filters, setFilters] = useState<ExceptionFilters>({})
   const [showNewForm, setShowNewForm] = useState(false)
@@ -96,7 +100,7 @@ export default function ExceptionsPage() {
         top: 0,
         zIndex: 10,
       }}>
-        <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
           <div>
             <h1 style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.01em' }}>
               Deal Exceptions Tracker
@@ -105,13 +109,57 @@ export default function ExceptionsPage() {
               Track and manage deal exception requests
             </p>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowNewForm(true)}>
-            <span style={{ fontSize: '16px', lineHeight: 1, marginRight: '2px' }}>+</span>
-            New Exception
-          </button>
+
+          {/* Tab switcher */}
+          <div style={{
+            display: 'flex',
+            background: 'var(--bg)',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            padding: '3px',
+            gap: '2px',
+          }}>
+            {(['exceptions', 'reports'] as ActiveView[]).map(view => (
+              <button
+                key={view}
+                onClick={() => setActiveView(view)}
+                style={{
+                  padding: '5px 14px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  borderRadius: '6px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: activeView === view ? 'var(--surface)' : 'transparent',
+                  color: activeView === view ? 'var(--text)' : 'var(--muted)',
+                  boxShadow: activeView === view ? 'var(--shadow-sm)' : 'none',
+                  transition: 'all 0.15s',
+                  textTransform: 'capitalize',
+                }}
+              >
+                {view}
+              </button>
+            ))}
+          </div>
+
+          {activeView === 'exceptions' && (
+            <button className="btn btn-primary" onClick={() => setShowNewForm(true)}>
+              <span style={{ fontSize: '16px', lineHeight: 1, marginRight: '2px' }}>+</span>
+              New Exception
+            </button>
+          )}
         </div>
       </header>
 
+      {/* Reports view */}
+      {activeView === 'reports' && (
+        <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '20px 24px' }}>
+          <ReportsPage />
+        </div>
+      )}
+
+      {/* Exceptions view */}
+      {activeView === 'exceptions' && (
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '20px 24px' }}>
 
         {/* Stats Row */}
@@ -272,6 +320,7 @@ export default function ExceptionsPage() {
           </p>
         )}
       </div>
+      )} {/* end exceptions view */}
 
       {/* New Exception Modal */}
       {showNewForm && (
