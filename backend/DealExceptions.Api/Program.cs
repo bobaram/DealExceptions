@@ -19,8 +19,11 @@ try
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(c => c.SwaggerDoc("v1", new() { Title = "Deal Exceptions API", Version = "v1" }));
 
+    var allowedOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? "http://localhost:3000")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
     builder.Services.AddCors(opts => opts.AddDefaultPolicy(p =>
-        p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+        p.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod()));
 
     var app = builder.Build();
 
