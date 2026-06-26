@@ -1,6 +1,8 @@
+using DealExceptions.Application.Interfaces;
 using DealExceptions.Application.Services;
 using DealExceptions.Endpoints;
 using DealExceptions.Infrastructure.Data;
+using DealExceptions.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 
@@ -16,6 +18,8 @@ try
     builder.Services.AddDbContext<AppDbContext>(opts =>
         opts.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+    builder.Services.AddScoped<IExceptionRepository, ExceptionRepository>();
+    builder.Services.AddScoped<ICommentRepository, CommentRepository>();
     builder.Services.AddScoped<ExceptionService>();
     builder.Services.AddScoped<CommentService>();
 

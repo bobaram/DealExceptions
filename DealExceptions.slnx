@@ -1,5 +1,8 @@
 <Solution>
   <Folder Name="/backend/">
-    <Project Path="backend/DealExceptions.Api.csproj" />
+    <Project Path="backend/DealExceptions.Api/DealExceptions.Api.csproj" />
+    <Project Path="backend/DealExceptions.Application/DealExceptions.Application.csproj" />
+    <Project Path="backend/DealExceptions.Domain/DealExceptions.Domain.csproj" />
+    <Project Path="backend/DealExceptions.Infrastructure/DealExceptions.Infrastructure.csproj" />
   </Folder>
 </Solution>
