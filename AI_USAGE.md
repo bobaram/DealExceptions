@@ -1,118 +1,79 @@
 # AI Usage
 
-## Tools Used
-
-- **Claude (claude-sonnet-4-6 via Claude Code CLI)** — primary tool throughout
+I used Claude (claude-sonnet-4-6 via Claude Code CLI) throughout this project. This document covers what I actually used it for, what I changed or rejected, and where I had to verify things myself.
 
 ---
 
-## What I Used AI For
+## What I used it for
 
-### Architecture and planning
+**Architecture decisions**
 
-Used AI to talk through the architecture before writing any code: Minimal APIs vs controllers, Dapper vs EF Core, whether to include a repository layer, DbUp vs EF Core migrations, and how to structure stored procedures for idempotent deployment. The recommendations were sensible and I agreed with them.
+Before writing any code I talked through the architecture with Claude — Minimal APIs vs controllers, Dapper vs EF Core, whether a repository layer was worth the boilerplate at this scale, and how to handle database migrations cleanly. The conversation was useful for pressure-testing assumptions quickly. I agreed with most of it; the main thing I pushed back on was EF Core (more on that below).
 
-### Scaffolding boilerplate
+**Boilerplate**
 
-Used AI to generate the initial versions of:
-- `.csproj` files with correct package references and versions
-- Dapper repository pattern with a `DealExceptionRow` private subclass for capturing `COUNT(*) OVER()` pagination columns without polluting the domain entity
-- DbUp runner configuration (`NullJournal` for RunAlways scripts, standard journal for one-time scripts)
-- Vite + React + TypeScript project config (`tsconfig.json`, `vite.config.ts`, `package.json`)
-- Multi-stage Dockerfiles for both backend and frontend
-- nginx reverse proxy config
+The parts of the project that are purely configuration — `.csproj` files with the right package versions, multi-stage Dockerfiles, nginx reverse proxy config, `tsconfig.json`, `vite.config.ts` — I used Claude to generate. Getting these wrong wastes time for no good reason; getting them right is just pattern matching against known-good templates. Claude is good at this and I checked every file before committing.
 
-This saved significant time on configuration that is correct-or-broken with no middle ground.
+**Stored procedures**
 
-### Data normalisation logic
+All nine `usp_*` stored procedures were drafted with Claude's help. I reviewed each one for correctness — particularly the `COUNT(*) OVER()` window function for returning pagination totals in a single query, the `OFFSET … FETCH NEXT … ROWS ONLY` syntax, and the duplicate detection logic that needs to flag both the new row and any existing open matches in the same operation. The SQL was run against a real SQL Server instance and verified to produce the right results before being committed.
 
-Used AI to reason through the messy seed data: resolving `"H"` → `High`, `"critical "` → `Critical`, `"CLOSEd"` → `Closed`, three date formats, and three variants of the same owner name. The normalisation decisions were verified against the source CSV before accepting them.
+**Data normalisation**
 
-### Stored procedure design
+The seed data was a mess. The legacy CSV had priorities written as `"H"`, `"critical "` (with a trailing space), and `"Critical"` all meaning the same thing. Dates in three different formats. The same owner name written three different ways. I used Claude to work through the normalisation logic, then verified every decision against the source CSV row by row before accepting it.
 
-Used AI to draft all nine `usp_*` stored procedures. Reviewed each one for:
-- Correct `CREATE OR ALTER PROCEDURE` syntax for idempotent re-deployment
-- `COUNT(*) OVER()` window function for single-query pagination totals (avoids a second round-trip)
-- `OFFSET … FETCH NEXT … ROWS ONLY` pagination syntax
-- Duplicate detection logic: flagging both the new row and all existing open matches in the same transaction
-- `SCOPE_IDENTITY()` usage after inserts
+**Service and endpoint implementation**
 
-### Service and endpoint implementation
+The service layer and API endpoints were generated with Claude and reviewed for correct async usage, sensible error handling, and validation that matched the business rules. Nothing was accepted without being read.
 
-Used AI to generate the service and endpoint implementations based on the agreed contracts. Reviewed each file for:
-- Correct async/await usage with Dapper (`QueryAsync`, `ExecuteAsync`, `QuerySingleOrDefaultAsync`)
-- Sensible error handling (`ArgumentException` → 400, null → 404)
-- Validation that matched the business rules from the brief
-- `PagedResult<T>` wrapper DTO flowing cleanly from SP → repository → service → endpoint
+**Tests**
 
-### Test suite
+The unit test and integration test scaffolding — xUnit + Moq for services, `WebApplicationFactory` with a real SQL Server test database for integration tests — was generated with Claude. I reviewed the structure and the test cases, particularly the integration test isolation approach (`ICollectionFixture` with per-test table resets) and the `TestAuthHandler` that bypasses JWT validation in the test host.
 
-Used AI to generate the unit and integration test scaffolding:
-- xUnit + Moq unit tests for `ExceptionService` (28 tests) and `CommentService` (5 tests)
-- `WebApplicationFactory<Program>` integration tests against a real SQL Server test database (28 tests across exceptions and comments endpoints)
-- `ICollectionFixture<ApiFixture>` to share one database fixture across all integration test classes
-- `TestAuthHandler` that always returns a successful authentication result, registered via `ConfigureTestServices` to bypass JWT validation in the test host
+**Authentication**
 
-### JWT authentication
+The full auth flow was built with Claude: the login endpoint, JWT signing, the fallback policy that protects all routes by default, the frontend login page, token storage, and the `auth:expired` event pattern for handling 401s cleanly. I reviewed the security properties of each part.
 
-Used AI to implement the full auth flow:
-- `POST /api/auth/login` endpoint reading users from `appsettings.json`, issuing a signed JWT
-- `FallbackPolicy` requiring authentication on all endpoints except login and health check
-- Frontend login page, `sessionStorage` token persistence, `Authorization: Bearer …` header injection in `client.ts`, and `auth:expired` DOM event for 401 handling
-- Swagger Bearer security definition
+**React components**
 
-### React components
-
-Used AI to generate the component implementations. Reviewed for correct TanStack Query usage (`useQuery` keys, `useMutation` + `invalidateQueries`), form validation patterns, and accessibility basics.
-
-### README
-
-Used AI to draft the README sections, particularly the "Converting the Shadow App" and "Working in a Small Team" sections. These were based on genuine analysis of the legacy data and business user notes — AI helped structure and articulate conclusions I had already reached.
+Components were generated with Claude and reviewed for correct TanStack Query usage, form validation, and that the API paths matched what the backend actually exposed.
 
 ---
 
-## What I Accepted, Changed, or Rejected
+## What I changed or rejected
 
-| Output | Decision | Reason |
-|---|---|---|
-| EF Core for data access | Rejected | Stored procedures give explicit control over SQL; Dapper is lighter and fits the repo's audit-trail needs without the ORM overhead |
-| EF Core migrations | Rejected | DbUp with `CREATE OR ALTER PROCEDURE` gives idempotent, reviewable SQL scripts that match how the DBA team would want to own schema changes |
-| Repository pattern | Accepted (adapted) | Kept the interface for testability with Moq; the concrete implementation is thin Dapper code, not a generic repository |
-| `WebApplicationFactory` with `ConfigureAppConfiguration` override | Changed to `UseSetting` | `ConfigureAppConfiguration` ran too late; `UseSetting` has guaranteed highest priority and correctly overrides the connection string before `AddInfrastructure` reads it |
-| Swagger + Serilog package versions | Accepted after checking | Confirmed compatible with .NET 8 on NuGet |
-| Redux for frontend state | Rejected | TanStack Query handles server state; no complex client state requiring Redux |
-| Tailwind CSS | Rejected | Adds build config complexity; plain CSS is sufficient for this scope |
-| Status badge inline styles | Accepted | Keeps components self-contained without a CSS class naming convention to maintain |
-| Azure Entra ID for auth | Deferred | The brief calls for awareness of auth; a full Entra ID integration requires tenant configuration outside the scope of a self-contained Docker Compose setup. Current implementation uses a local JWT issuer with hardcoded dev users and is explicitly noted as incomplete in the README |
+**EF Core → Dapper + stored procedures.** Claude's first suggestion was EF Core. I rejected it. Stored procedures give explicit, reviewable SQL that a DBA can understand and own. Dapper is lighter and doesn't hide what's happening. For a system where the audit trail and data integrity matter, I'd rather see the SQL.
 
----
+**EF Core migrations → DbUp.** Same reasoning. DbUp with `CREATE OR ALTER PROCEDURE` gives idempotent, version-controlled SQL scripts. EF Core migrations are fine for greenfield projects but they're not what I'd want a DBA reviewing before a production deployment.
 
-## How I Verified AI-Assisted Work
+**`ConfigureAppConfiguration` override in tests → `UseSetting`.** The first approach to overriding the test database connection string wasn't working — the app was still picking up the main database. The root cause was timing: `ConfigureAppConfiguration` ran after `AddInfrastructure` had already read the config. Switching to `builder.UseSetting()` fixed it because it has guaranteed highest priority.
 
-- Read every generated file before committing — did not commit output blindly
-- Verified stored procedure SQL against SQL Server 2022 syntax (window functions, `OFFSET … FETCH`, `SCOPE_IDENTITY`)
-- Checked that pagination `COUNT(*) OVER()` returns the correct total by tracing the value from SP through `DealExceptionRow.TotalCount` to `PagedResult<T>.TotalCount` in the API response
-- Confirmed duplicate detection logic handles both directions: new row flagged, and existing open rows back-flagged
-- Verified that `UseSetting` correctly overrides the connection string in integration tests by checking that seed data from the main database did not appear in test results
-- Checked all API endpoint paths in the frontend API client match the backend endpoint registrations
-- Confirmed Docker Compose service names match the nginx proxy target (`http://backend:8080`)
+**Redux → TanStack Query.** Claude didn't push this but it came up in the architecture discussion. TanStack Query handles all the server state; there's nothing left that needs Redux.
+
+**Tailwind → plain CSS.** Adds build complexity for no benefit at this scale.
+
+**Azure Entra ID → local JWT issuer.** A full Entra ID integration requires tenant configuration that isn't possible in a self-contained Docker Compose setup. The current implementation uses a local issuer with two hardcoded dev accounts. It's explicitly flagged as incomplete in the README, and the path to the real thing is clear.
 
 ---
 
-## Risks Considered
+## How I verified the output
 
-**Security:**
-- Authentication is implemented with a local JWT issuer and dev-only hardcoded credentials. This is noted as incomplete — production requires Entra ID integration. The `ChangedBy` field is now populated from the frontend's decoded token rather than a free-text input, but it is still accepted as a request body field and not verified server-side against the token claims. A server-side claim extraction would close that gap.
-- The JWT secret in `appsettings.json` is a dev placeholder. Production must override it via `JWT__Secret` environment variable; it must never be committed with a real value.
+The main rule was: don't commit anything I haven't read. Beyond that:
 
-**Data leakage:**
-- The seed data uses fictional client names and deal references. No real customer data was pasted into any AI prompt.
+- Every stored procedure was run against a real SQL Server instance. I didn't trust syntax correctness from inspection alone.
+- The seed data normalisation was checked against the source CSV row by row.
+- Pagination was traced end-to-end: from the `COUNT(*) OVER()` in the SP, through the `DealExceptionRow.TotalCount` property in the repository, to `PagedResult<T>.TotalCount` in the API response.
+- Integration tests were verified to be hitting the test database and not the main one. The way I confirmed this was checking that the 12 seed records from the main database did not appear in test results after `ResetTablesAsync()`.
+- All frontend API paths were checked against the backend endpoint registrations.
 
-**Correctness:**
-- Dapper queries checked for correct parameter passing (named parameters matching SP `@Param` names exactly)
-- `OFFSET … FETCH` requires an `ORDER BY` clause in SQL Server — verified the SP includes one
-- Integration test isolation checked: each test class calls `ResetTablesAsync()` in `InitializeAsync()`, which deletes all rows and reseeds identity columns to zero, preventing test-order dependencies
+---
 
-**Hallucination:**
-- Package versions were verified on NuGet rather than trusted from AI output
-- All SQL was executed against a real SQL Server instance (Docker) and observed to produce correct results before being committed
+## Risks I thought about
+
+**The JWT secret.** The value in `appsettings.json` is a dev placeholder. It must be overridden via the `JWT__Secret` environment variable before this goes anywhere near production. If that doesn't happen, any token signed with the dev secret would be accepted.
+
+**`ChangedBy` is still client-controlled.** The display name comes from the logged-in user's session on the frontend, which reads it from the decoded JWT. But the API endpoint still accepts `changedBy` as a field in the request body and doesn't verify it against the token claims server-side. A determined client could pass any value. The fix is to extract the claim from `HttpContext.User` on the backend rather than trusting the request body — that's part of the Entra ID integration work.
+
+**No real customer data in AI prompts.** The seed data uses fictional names and deal references throughout. Nothing from the actual legacy system was pasted into any prompt.
+
+**Package versions.** I checked every package version on NuGet rather than accepting whatever Claude suggested. This is an area where AI output goes stale quickly.
