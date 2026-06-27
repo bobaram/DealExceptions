@@ -111,109 +111,78 @@ A few things were deliberately left out given the time constraint, but they're w
 
 ---
 
-## Converting the Shadow App
+## Migration Notes
 
-### What to investigate before writing any code
+The app is built and the data model is solid, but getting the live SharePoint data across cleanly is the hardest part of the whole project. A few things we already know from looking at the legacy data.
 
-The legacy system has a lot of hidden complexity. Before touching anything in production:
+### What we know so far
 
-- Pull every column out of the SharePoint list, including hidden and computed columns that aren't visible in the default view
-- Go through every PowerApps formula, especially the validation rules and patch logic — some business rules only exist in formulas and aren't written down anywhere
-- Find all the Excel export templates and any macros or pivot tables built on top of them — people have built things on this data that you don't know about
-- Find out who has direct SharePoint edit access and is bypassing PowerApps to modify rows. The data coming out of that list is not all coming through the same validation path
-- Track down every historical value of ExceptionType and Priority — deleted choices still exist on old rows
+The data is messier than it looks from the SharePoint UI. When we normalised the seed records we found priorities written as `"H"`, `"critical "` (trailing space), and `"Critical"` all meaning the same thing. Dates in three different formats. Row 1005 is a clear duplicate from an export-reimport cycle — there are almost certainly more. Legacy ID 1011 was never in SharePoint at all; it only existed in an email chain.
 
-### Risks that need to be understood before migrating
+The SharePoint list also accepts writes that bypass PowerApps entirely — anyone with direct list edit access can put anything in any field, no validation applied. We don't know how much data came in that way, but we should assume some did.
 
-- **Duplicate rows.** The export-edit-reimport cycle has been creating duplicates. At least one was found in the seed data (row 1005). There are likely more that won't be obvious until you look closely.
-- **Data living in email chains.** Information about some exceptions was captured in emails and never made it into SharePoint. Legacy ID 1011 is an example. A migration that only looks at the SharePoint list will miss this.
-- **Validation that only exists in the UI.** The SharePoint list itself will accept anything. Rows written directly to SharePoint (bypassing PowerApps) have no validation applied. Assume the data is messier than it looks.
-- **One person holds the context.** The original app builder knows rules that aren't documented anywhere. If that person leaves before those rules are captured, they're gone.
-- **Reporting that ExCo trusts but shouldn't.** The current reports are built on messy data. When you clean the data up during migration, the numbers will change. That needs to be managed carefully — leadership will notice and it needs an explanation ready.
+The other risk is the app builder. A lot of the business logic only exists in PowerApps formulas — Pricing Override needing Finance review, the 3-day rule for Critical exceptions, what a valid close note looks like. If that person isn't available for the migration, some of those rules will get lost.
 
-### How to approach the migration
+### How we're planning to migrate
 
-1. Export the full SharePoint list to CSV. Export comments separately if they're in a related list.
-2. Write a one-off normalisation script. Keep a `LegacyId` column in every row so you can always trace back to the source.
-3. Run the script against a staging environment and produce a diff report — exactly what changed and why. Don't just import; document every transformation.
-4. Get the business owner to review the diff before anything goes near production.
-5. Keep the old system in read-only mode for at least 60 days after the migration. Don't delete it.
+The plan is to export everything to CSV, run it through a normalisation script (same logic as the seed data, just applied to the full dataset), and produce a diff report before anything touches production. Every transformation gets documented — not just the result, but why. The business owner reviews that diff and signs off before we import.
 
-### Involving the business
+We'll preserve the `LegacyId` on every row so there's always a way to trace back to the source record if something looks wrong after go-live.
 
-- Run structured workshops with the app builder before writing any replacement logic. The goal is to surface every informal rule and get it written down.
-- Run both systems in parallel during UAT so users can directly compare the behaviour.
-- Find one power user in the business team to own the acceptance criteria and do hands-on testing.
-- Don't decomission the old app until someone in the business signs off in writing that the new one is ready.
+The old system stays in read-only mode for at least 60 days. We're not deleting it.
 
-### What not to rebuild immediately
+### What we're not rebuilding yet
 
-- **The Excel export.** Users trust it and ExCo reports depend on it. Add a CSV download endpoint and let them migrate their templates in their own time.
-- **The Admin Choices screen.** Leave exception types and priorities as config data for now rather than building an admin UI in the first phase.
-- **Anything in PowerApps that isn't documented.** Don't try to replicate behaviour you don't fully understand.
+The Excel export is staying as-is for now. People have built reports and pivot tables on top of those exports and we're not pulling that out from under them. We'll add a CSV download endpoint and let teams migrate their templates in their own time.
 
-### What needs to be true before Tech & Data takes ownership
-
-- Every informal business rule has been documented and reviewed by the business owner
-- The data migration has been validated and signed off
-- At least one full sprint of parallel running — both old and new systems live at the same time
-- Authentication integrated with the company identity provider
-- A named business owner for the new system who can raise bugs and set priorities
-- A runbook covering deployments, database backups, and what to do when something breaks
+Same with the exception type and priority choices — those are config data, not something that needs an admin UI in the first phase.
 
 ---
 
-## Working as a Team
+## What's Next
 
-Here's how I'd split this across a team of four developers and a tester, assuming the core build is done and the work now is to harden and hand over.
+The core system is running. Here's what needs to happen before this goes to production.
 
-**Tech lead (me):**
-Own the architecture and PR reviews. Lead the Entra ID integration to replace the dev JWT issuer. Write the data migration script and run the normalisation workshops with the business. Make the final call on anything touching the database schema.
+**Entra ID integration** is the blocker for everything else. The current login uses a local JWT issuer with two hardcoded accounts — that's fine for development but can't go live. Once we have Entra ID wired up, `ChangedBy` and `AuthorName` get pulled from token claims server-side rather than trusted from the client, and the owner picker has a real user directory to query against.
 
-**Developer 2 — backend:**
-Build role-based authorisation (admin/reviewer gates on Approve and Reject). Add the owner lookup service against the identity provider or HR feed. Add rate limiting on the login endpoint and any other hardening before production.
+**Role-based authorisation** is straightforward once Entra ID is in place. Approve and Reject should be gated behind a reviewer role — right now anyone who can log in can do anything. The role membership will come from Entra ID group claims so there's nothing to maintain in the application database.
 
-**Developer 3 — frontend:**
-Build the owner autocomplete picker once the backend lookup is ready. Add a CSV export button. Write React component tests and Playwright end-to-end tests.
+**Owner picker** replaces the free-text owner field. At the moment "Nomsa", "Nomsa Mokoena", and "nomsa.mokoena@example.com" are three different people as far as the reporting is concerned. Once we have a user directory endpoint, the frontend field becomes a searchable dropdown and the reporting cleans up automatically.
 
-**Developer 4 — full stack:**
-Build the notification system for critical exceptions approaching the 3-day threshold. Add file attachment support. Own the CI/CD pipeline and deployment runbook.
+**Notifications** for critical exceptions approaching the 3-day threshold. The data is all there — the overdue report already surfaces them. It just needs an email trigger.
 
-**Tester:**
-Own UAT with the business team. Write and maintain test cases for all the informal business rules uncovered in the workshops. Run the parallel-running validation — same action in both systems, compare the output.
+**File attachments** for affordability exceptions. The business flagged this early; it'll need blob storage and a link on the exception record.
+
+**Frontend tests** — the backend has good coverage but the React side has none. Playwright end-to-end tests covering the main workflows before production.
 
 ---
 
-### Backlog items
+## Team
 
-**DE-01 — Entra ID: replace dev JWT issuer with the company identity provider**
+The current split for getting this to production:
 
-The current auth works but uses hardcoded users and a local JWT issuer. Production needs to go through Entra ID.
+**Tech lead** — Entra ID integration, data migration script, normalisation workshops with the business, schema decisions, PR reviews.
 
-Acceptance criteria:
-- All endpoints require a valid Bearer token from Entra ID
-- `ChangedBy` and `AuthorName` are extracted from token claims server-side, not passed in the request body
-- The frontend redirects to the Entra ID login page when no valid session exists
-- Swagger supports the OAuth2 implicit flow for manual testing
+**Backend developer** — role-based authorisation, owner lookup service, rate limiting and security hardening on the auth endpoints.
 
----
+**Frontend developer** — owner autocomplete picker, CSV export button, React component tests, Playwright end-to-end tests.
 
-**DE-02 — Owner lookup: replace the free-text owner field with a validated picker**
+**Full-stack developer** — email notification system, file attachments, CI/CD pipeline, deployment runbook.
 
-Right now "Nomsa", "Nomsa Mokoena", and "nomsa.mokoena@example.com" are three different owners in reports. They shouldn't be.
-
-Acceptance criteria:
-- `GET /api/users` returns valid owners from the identity provider or HR feed
-- The frontend owner field is a searchable dropdown
-- Existing rows with unrecognised owner strings are flagged for review
-- Legacy owner variants are resolved to canonical identities during migration
+**Tester** — UAT with the business team, test cases for every informal business rule we surface in the workshops, parallel-running validation between old and new systems.
 
 ---
 
-**DE-03 — Role-based authorisation: only reviewers can Approve or Reject**
+## Open Tickets
 
-Acceptance criteria:
-- Users with the `reviewer` role can transition exceptions to Approved or Rejected
-- Other users see those options disabled
-- Attempts to call the endpoint without the right role return 403
-- Role membership comes from Entra ID group claims, not from the application database
+**DE-01 — Entra ID: swap out the local JWT issuer**
+
+The two hardcoded dev accounts need to go. Wire up Entra ID so every token comes from the company identity provider. Once that's done, pull `ChangedBy` and `AuthorName` from the token claims on the server side rather than accepting them from the request body — right now a client could pass any value there.
+
+**DE-02 — Owner picker: fix the owner name problem**
+
+`GET /api/users` needs to return a validated list from the identity provider or HR feed. The frontend owner field becomes a searchable dropdown. Existing rows with unrecognised owner strings get flagged for review, and the migration script will need a pass to resolve the legacy variants to canonical identities.
+
+**DE-03 — Roles: only reviewers should be able to Approve or Reject**
+
+Add a `reviewer` role sourced from Entra ID group claims. Gate the Approve and Reject status transitions behind it. Everyone else sees those options disabled. Unauthorised attempts return 403.
