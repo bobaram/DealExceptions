@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="DealExceptions.Api/DealExceptions.Api.csproj" />
+  <Project Path="DealExceptions.Application/DealExceptions.Application.csproj" />
+  <Project Path="DealExceptions.Database.DbUp/DealExceptions.Database.DbUp.csproj" />
+  <Project Path="DealExceptions.Domain/DealExceptions.Domain.csproj" />
+  <Project Path="DealExceptions.Infrastructure/DealExceptions.Infrastructure.csproj" />
+  <Project Path="DealExceptions.Tests.Integration/DealExceptions.Tests.Integration.csproj" />
+  <Project Path="DealExceptions.Tests.Unit/DealExceptions.Tests.Unit.csproj" />
+</Solution>
