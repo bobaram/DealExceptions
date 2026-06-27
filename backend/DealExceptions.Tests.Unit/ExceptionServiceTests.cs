@@ -20,17 +20,17 @@ public class ExceptionServiceTests
     [Fact]
     public async Task GetAllAsync_ReturnsEmpty_WhenRepositoryHasNoItems()
     {
-        _repo.Setup(r => r.ListAsync(It.IsAny<ExceptionFilters>())).ReturnsAsync([]);
+        _repo.Setup(r => r.ListAsync(It.IsAny<ExceptionFilters>())).ReturnsAsync((new List<DealException>(), 0));
 
         var result = await _svc.GetAllAsync(null, null, null, false);
 
-        Assert.Empty(result);
+        Assert.Empty(result.Items);
     }
 
     [Fact]
     public async Task GetAllAsync_PassesFiltersToRepository()
     {
-        _repo.Setup(r => r.ListAsync(It.IsAny<ExceptionFilters>())).ReturnsAsync([]);
+        _repo.Setup(r => r.ListAsync(It.IsAny<ExceptionFilters>())).ReturnsAsync((new List<DealException>(), 0));
 
         await _svc.GetAllAsync("New", "High", "DEAL-1", true);
 
@@ -48,9 +48,9 @@ public class ExceptionServiceTests
     public async Task GetAllAsync_SetsIsOpen_CorrectlyByStatus(ExceptionStatus status, bool expectedIsOpen)
     {
         _repo.Setup(r => r.ListAsync(It.IsAny<ExceptionFilters>()))
-             .ReturnsAsync([MakeException(status: status)]);
+             .ReturnsAsync((new List<DealException> { MakeException(status: status) }, 1));
 
-        var result = (await _svc.GetAllAsync(null, null, null, false)).Single();
+        var result = (await _svc.GetAllAsync(null, null, null, false)).Items.Single();
 
         Assert.Equal(expectedIsOpen, result.IsOpen);
     }
@@ -63,9 +63,9 @@ public class ExceptionServiceTests
     public async Task GetAllAsync_SetsIsCritical_OnlyForCriticalPriority(Priority priority, bool expected)
     {
         _repo.Setup(r => r.ListAsync(It.IsAny<ExceptionFilters>()))
-             .ReturnsAsync([MakeException(priority: priority)]);
+             .ReturnsAsync((new List<DealException> { MakeException(priority: priority) }, 1));
 
-        var result = (await _svc.GetAllAsync(null, null, null, false)).Single();
+        var result = (await _svc.GetAllAsync(null, null, null, false)).Items.Single();
 
         Assert.Equal(expected, result.IsCritical);
     }
