@@ -1,9 +1,15 @@
+using System.Security.Claims;
+using System.Text.Encodings.Web;
 using System.Text.RegularExpressions;
-using Xunit;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Xunit;
 
 namespace DealExceptions.Tests.Integration;
 
@@ -21,6 +27,9 @@ public sealed class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:DefaultConnection", TestCs);
+        builder.ConfigureTestServices(services =>
+            services.AddAuthentication("Test")
+                    .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { }));
     }
 
     // ── IAsyncLifetime ─────────────────────────────────────────────────────────
@@ -98,6 +107,21 @@ public sealed class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
         Regex.Split(sql, @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)
              .Select(b => b.Trim())
              .Where(b => b.Length > 0);
+}
+
+public sealed class TestAuthHandler(
+    IOptionsMonitor<AuthenticationSchemeOptions> options,
+    ILoggerFactory logger,
+    UrlEncoder encoder)
+    : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+{
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        var claims    = new[] { new Claim(ClaimTypes.NameIdentifier, "test"), new Claim(ClaimTypes.Name, "Test User") };
+        var identity  = new ClaimsIdentity(claims, Scheme.Name);
+        var principal = new ClaimsPrincipal(identity);
+        return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name)));
+    }
 }
 
 [CollectionDefinition("Api")]

@@ -4,6 +4,7 @@ import type { CreateExceptionPayload } from '../api/exceptions'
 interface Props {
   onSubmit: (data: CreateExceptionPayload) => Promise<void>
   onCancel: () => void
+  defaultCreatedBy: string
 }
 
 const EXCEPTION_TYPES = [
@@ -25,17 +26,15 @@ interface FormErrors {
   exceptionType?: string
   description?: string
   priority?: string
-  createdBy?: string
 }
 
-export function NewExceptionForm({ onSubmit, onCancel }: Props) {
+export function NewExceptionForm({ onSubmit, onCancel, defaultCreatedBy }: Props) {
   const [dealRef, setDealRef] = useState('')
   const [clientName, setClientName] = useState('')
   const [exceptionType, setExceptionType] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState('Medium')
   const [assignedOwner, setAssignedOwner] = useState('')
-  const [createdBy, setCreatedBy] = useState('')
   const [errors, setErrors] = useState<FormErrors>({})
   const [apiError, setApiError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -47,7 +46,6 @@ export function NewExceptionForm({ onSubmit, onCancel }: Props) {
     if (!exceptionType) e.exceptionType = 'Exception Type is required'
     if (!description.trim()) e.description = 'Description is required'
     if (!priority) e.priority = 'Priority is required'
-    if (!createdBy.trim()) e.createdBy = 'Your Name is required'
     return e
   }
 
@@ -68,7 +66,7 @@ export function NewExceptionForm({ onSubmit, onCancel }: Props) {
         exceptionType,
         description: description.trim(),
         priority,
-        createdBy: createdBy.trim(),
+        createdBy: defaultCreatedBy,
       }
       if (assignedOwner.trim()) {
         payload.assignedOwner = assignedOwner.trim()
@@ -176,16 +174,14 @@ export function NewExceptionForm({ onSubmit, onCancel }: Props) {
       </div>
 
       <div style={fieldStyle}>
-        <label htmlFor="nef-createdBy">Your Name *</label>
-        <input
-          id="nef-createdBy"
-          type="text"
-          value={createdBy}
-          onChange={e => setCreatedBy(e.target.value)}
-          placeholder="e.g. John Doe"
-          disabled={submitting}
-        />
-        {errors.createdBy && <p style={errorStyle}>{errors.createdBy}</p>}
+        <label>Submitting as</label>
+        <p style={{
+          fontSize: '14px', color: 'var(--text)',
+          padding: '8px 10px', margin: 0,
+          background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '6px',
+        }}>
+          {defaultCreatedBy}
+        </p>
       </div>
 
       {apiError && (

@@ -13,7 +13,7 @@ const ALL_STATUSES  = ['New', 'Pending', 'InReview', 'Approved', 'Rejected', 'Cl
 const ALL_PRIORITIES = ['Low', 'Medium', 'High', 'Critical']
 const PAGE_SIZE = 20
 
-export default function ExceptionsPage() {
+export default function ExceptionsPage({ username, onLogout }: { username: string; onLogout: () => void }) {
   const queryClient = useQueryClient()
   const [activeView, setActiveView]   = useState<ActiveView>('exceptions')
   const [selectedId, setSelectedId]   = useState<number | null>(null)
@@ -86,12 +86,12 @@ export default function ExceptionsPage() {
 
   async function handleStatusChange(status: string, notes?: string) {
     if (!selectedId) return
-    await updateStatusMutation.mutateAsync({ id: selectedId, status, notes, changedBy: 'User' })
+    await updateStatusMutation.mutateAsync({ id: selectedId, status, notes, changedBy: username })
   }
 
   async function handleAddComment(text: string) {
     if (!selectedId) return
-    await addCommentMutation.mutateAsync({ exceptionId: selectedId, authorName: 'User', text })
+    await addCommentMutation.mutateAsync({ exceptionId: selectedId, authorName: username, text })
   }
 
   async function handleCreateException(data: CreateExceptionPayload) {
@@ -153,12 +153,31 @@ export default function ExceptionsPage() {
             ))}
           </div>
 
-          {activeView === 'exceptions' && (
-            <button className="btn btn-primary" onClick={() => setShowNewForm(true)}>
-              <span style={{ fontSize: '16px', lineHeight: 1, marginRight: '2px' }}>+</span>
-              New Exception
-            </button>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {activeView === 'exceptions' && (
+              <button className="btn btn-primary" onClick={() => setShowNewForm(true)}>
+                <span style={{ fontSize: '16px', lineHeight: 1, marginRight: '2px' }}>+</span>
+                New Exception
+              </button>
+            )}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              padding: '4px 8px 4px 12px',
+              background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '8px',
+            }}>
+              <span style={{ fontSize: '13px', color: 'var(--text-2)', fontWeight: 500 }}>{username}</span>
+              <button
+                onClick={onLogout}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: '12px', color: 'var(--muted)', padding: '2px 4px',
+                  borderRadius: '4px',
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -413,7 +432,7 @@ export default function ExceptionsPage() {
                 &times;
               </button>
             </div>
-            <NewExceptionForm onSubmit={handleCreateException} onCancel={() => setShowNewForm(false)} />
+            <NewExceptionForm onSubmit={handleCreateException} onCancel={() => setShowNewForm(false)} defaultCreatedBy={username} />
           </div>
         </div>
       )}
