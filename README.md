@@ -33,6 +33,13 @@ The startup sequence is:
 3. **API** starts and listens on port 8080
 4. **Frontend** (nginx serving the Vite build) starts on port 3000
 
+**Login credentials (dev only):**
+
+| Username | Password     | Display name  |
+|----------|--------------|---------------|
+| admin    | Admin@123    | Admin User    |
+| analyst  | Analyst@123  | Deal Analyst  |
+
 To stop and remove containers (data is persisted in a named volume):
 ```bash
 docker compose down
@@ -84,29 +91,33 @@ Frontend dev server: http://localhost:5173
 
 ## What Is Complete
 
-- **Listing exceptions** with filters: status, priority, free-text search, open-only toggle
+- **Listing exceptions** with filters: status, priority, free-text search, open-only toggle, and server-side pagination
 - **Viewing an exception** with full comment and status-change history
-- **Creating a new exception** via a form with client-side validation
-- **Updating status** with an audit trail entry written on every change
+- **Creating a new exception** via a form with client-side validation; submitting user populated from the logged-in identity
+- **Updating status** with an audit trail entry written on every change, attributed to the authenticated user
 - **Adding comments** — stored as immutable history, not overwriting like the legacy app
 - **Priority highlighting** — Critical and High badges, critical-overdue warning banner
-- **Duplicate flagging** — row 1005 (Excel import duplicate) surfaced with a visible warning
-- **Four reporting endpoints**: open-by-owner, critical-overdue (>3 days), by-status-and-priority, avg-time-to-close
+- **Duplicate flagging** — automatic detection when the same DealRef or the same ClientName + ExceptionType combination exists on any open exception; both the new and existing rows are flagged
+- **Four reporting endpoints + Reports tab**: open-by-owner, critical-overdue (>3 days), by-status-and-priority, avg-time-to-close; visualised as bar charts, a pivot table, and a sortable table
 - **Seed data** normalised from the legacy CSV: inconsistent priorities (`H`, `critical`, `Critical `), statuses (`CLOSEd`, `InReview`, `APPROVED`), dates (three formats), and owner names resolved
-- **Swagger UI** for API exploration
+- **JWT Bearer authentication** — login page, Bearer token issued on `POST /api/auth/login`, all other endpoints protected by a fallback policy; display name from token replaces free-text author fields
+- **CORS** — configurable allowed origins via `Cors:AllowedOrigins` (comma-separated), overridable per environment
+- **Unit tests** — 28 tests covering `ExceptionService` and `CommentService` with Moq
+- **Integration tests** — 28 tests against a real SQL Server test database using `WebApplicationFactory`, covering CRUD, validation, duplicate detection, and pagination
+- **Swagger UI** with Bearer security definition for manual API testing
 - **Docker Compose** for one-command startup
-- **DbUp migrations** — idempotent schema + stored procedure scripts run on every startup; one-time scripts tracked in a journal table
+- **DbUp migrations** — idempotent schema + stored procedure scripts run on every startup; all data access through stored procedures (`usp_*`)
 
 ---
 
 ## What Is Incomplete
 
-- **Authentication / authorisation** — the API is open. In production this would sit behind the company's identity provider (Azure AD / Entra ID is likely given the SharePoint heritage). The `ChangedBy` / `CreatedBy` fields are currently free-text inputs; they would be populated from the JWT claims.
-- **Owner management** — owners are stored as free text. Production would join to an HR/identity list to prevent the same person being captured as "Nomsa", "Nomsa Mokoena", and "nomsa.mokoena@sourcefin.example".
-- **File attachments** — the business notes that affordability exceptions require supporting documents. This is not implemented.
-- **Email/notification integration** — no alerts when a critical exception approaches the 3-day threshold.
-- **Pagination** — the list endpoint returns all records. Acceptable at current data volume but needs adding before the dataset grows.
-- **Frontend tests** — no unit or integration tests written in the time available.
+- **Owner management** — owners are stored as free text. Production would join to an HR/identity list to prevent the same person being captured as "Nomsa", "Nomsa Mokoena", and "nomsa.mokoena@sourcefin.example"
+- **Azure Entra ID integration** — authentication is implemented with a local JWT issuer and hardcoded dev users. In production this would sit behind the company's identity provider (Azure AD / Entra ID given the SharePoint heritage); `ChangedBy` and `AuthorName` would be extracted from token claims server-side rather than passed from the client
+- **Role-based authorisation** — all authenticated users can perform all actions. A production system would gate Approve and Reject transitions behind an admin or finance-reviewer role
+- **File attachments** — the business notes that affordability exceptions require supporting documents. Not implemented
+- **Email/notification integration** — no alerts when a critical exception approaches the 3-day threshold
+- **Frontend tests** — no React component or end-to-end tests
 
 ---
 
@@ -154,7 +165,7 @@ Frontend dev server: http://localhost:5173
 - All informal business rules documented and reviewed by the business owner
 - Data migration validated and signed off
 - At least one full sprint of parallel running (old and new system both live)
-- Authentication wired to the company identity provider
+- Authentication wired to the company identity provider (Azure Entra ID)
 - A named business owner for the new system who can raise and prioritise bugs
 - Runbook written covering deployments, data backups, and incident response
 
@@ -166,20 +177,23 @@ Frontend dev server: http://localhost:5173
 
 **You (tech lead / backend):**
 - Own the architecture, PR reviews, and anything touching the database schema
-- Build the authentication integration and owner-lookup service
-- Write the data migration script and run the normalisation workshops
+- Build the Azure Entra ID integration to replace the current dev-only JWT issuer
+- Write the data migration script and run the normalisation workshops with the business
 
 **Developer 2 (backend):**
-- Add pagination, filtering improvements, and the file-attachment endpoint
-- Write integration tests for all API endpoints
+- Add role-based authorisation (admin/finance-reviewer gates on Approve/Reject transitions)
+- Build the owner-lookup service against the identity provider or HR feed
+- Add rate limiting and hardening to the login endpoint
 
 **Developer 3 (frontend):**
-- Extend the React UI: admin choices screen, owner autocomplete, Excel export button
-- Write component tests
+- Build the owner autocomplete picker once the backend lookup exists
+- Add a CSV/Excel export button for the exceptions list
+- Write React component tests and Playwright end-to-end tests
 
 **Developer 4 (full-stack):**
 - Build the notification system (email alerts for critical exceptions approaching 3-day threshold)
-- Own the CI/CD pipeline and Docker Compose → Kubernetes migration path
+- Add file attachment support (upload to blob storage, link to exception)
+- Own the CI/CD pipeline and deployment runbook
 
 **Tester:**
 - Own the UAT process with the business team
@@ -190,14 +204,14 @@ Frontend dev server: http://localhost:5173
 
 ### Example backlog items
 
-**DE-01 — Authentication: replace free-text ChangedBy with JWT identity**
+**DE-01 — Entra ID integration: replace dev JWT issuer with company identity provider**
 
-> As a system, I need every status change and comment to record the authenticated user's identity, not a manually typed name, so the audit trail is trustworthy.
+> As a system, I need every status change and comment to record the authenticated user's verified identity from the company directory, so the audit trail is trustworthy and cannot be spoofed.
 
 Acceptance criteria:
-- All API endpoints require a valid Bearer token (Azure Entra ID)
-- `ChangedBy` and `AuthorName` fields are populated from the token claims, not request body
-- Unauthenticated requests return 401
+- All API endpoints require a valid Bearer token issued by Azure Entra ID
+- `ChangedBy` and `AuthorName` are extracted from token claims server-side, not accepted from the request body
+- The frontend redirects to the Entra ID login page when no valid session exists
 - Swagger UI supports the OAuth2 implicit flow for manual testing
 
 ---
@@ -214,12 +228,12 @@ Acceptance criteria:
 
 ---
 
-**DE-03 — Pagination: add cursor/page-based pagination to the exceptions list**
+**DE-03 — Role-based authorisation: gate Approve/Reject behind a reviewer role**
 
-> As a user, I need the exceptions list to paginate so that the application remains responsive as the dataset grows beyond a few hundred rows.
+> As a compliance officer, I need only authorised reviewers to be able to approve or reject exceptions, so that the audit trail reflects a genuine decision by a qualified person.
 
 Acceptance criteria:
-- `GET /api/exceptions` accepts `page` and `pageSize` query parameters (default page size: 50)
-- Response includes `totalCount`, `page`, `pageSize`, and `hasNextPage` fields
-- The frontend renders a pagination control and fetches the correct page on navigation
-- Existing filter parameters (`status`, `priority`, `search`, `openOnly`) work correctly alongside pagination
+- Users with the `reviewer` role can transition exceptions to Approved or Rejected
+- Users without the role see the status options disabled in the UI
+- Attempts to call the status endpoint with an unauthorised transition return 403
+- Role membership is sourced from Entra ID group claims, not maintained in the application database
