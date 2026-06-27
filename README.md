@@ -113,29 +113,11 @@ A few things were deliberately left out given the time constraint, but they're w
 
 ## Migration Notes
 
-The app is built and the data model is solid, but getting the live SharePoint data across cleanly is the hardest part of the whole project. A few things we already know from looking at the legacy data.
+The data is messier than it looks. When normalising the seed records we found duplicate priorities (`"H"`, `"critical "`, `"Critical"`), dates in three formats, the same owner name written three different ways, at least one duplicate row from an export-reimport cycle, and one record that only existed in an email chain and never made it into SharePoint. Assume the full dataset has more of the same.
 
-### What we know so far
+The migration approach: export to CSV, run a normalisation script, produce a diff report for the business owner to review before anything touches production, keep the original `LegacyId` on every row for traceability, and leave the old system in read-only mode for 60 days after cutover.
 
-The data is messier than it looks from the SharePoint UI. When we normalised the seed records we found priorities written as `"H"`, `"critical "` (trailing space), and `"Critical"` all meaning the same thing. Dates in three different formats. Row 1005 is a clear duplicate from an export-reimport cycle — there are almost certainly more. Legacy ID 1011 was never in SharePoint at all; it only existed in an email chain.
-
-The SharePoint list also accepts writes that bypass PowerApps entirely — anyone with direct list edit access can put anything in any field, no validation applied. We don't know how much data came in that way, but we should assume some did.
-
-The other risk is the app builder. A lot of the business logic only exists in PowerApps formulas — Pricing Override needing Finance review, the 3-day rule for Critical exceptions, what a valid close note looks like. If that person isn't available for the migration, some of those rules will get lost.
-
-### How we're planning to migrate
-
-The plan is to export everything to CSV, run it through a normalisation script (same logic as the seed data, just applied to the full dataset), and produce a diff report before anything touches production. Every transformation gets documented — not just the result, but why. The business owner reviews that diff and signs off before we import.
-
-We'll preserve the `LegacyId` on every row so there's always a way to trace back to the source record if something looks wrong after go-live.
-
-The old system stays in read-only mode for at least 60 days. We're not deleting it.
-
-### What we're not rebuilding yet
-
-The Excel export is staying as-is for now. People have built reports and pivot tables on top of those exports and we're not pulling that out from under them. We'll add a CSV download endpoint and let teams migrate their templates in their own time.
-
-Same with the exception type and priority choices — those are config data, not something that needs an admin UI in the first phase.
+The bigger risk is the PowerApps logic. A lot of business rules only exist as formulas — Pricing Override needing Finance sign-off, the 3-day threshold for Critical exceptions, what counts as a valid close note. Those need to be captured in workshops with the app builder before any of it gets decommissioned.
 
 ---
 
